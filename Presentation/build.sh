@@ -6,7 +6,7 @@
 set -e
 
 MAIN_DIR="main"
-MAIN="manuscript"
+MAIN="manuscript_revision"
 BUILD_DIR="build"
 
 mkdir -p "$BUILD_DIR"

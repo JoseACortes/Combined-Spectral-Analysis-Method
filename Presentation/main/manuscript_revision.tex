@@ -60,14 +60,14 @@
 
 \begin{abstract}
 
-Traditional methods for measuring soil carbon are often time-consuming, expensive, and require laboratory analysis. Neutron-gamma analysis (NGA) offers an alternative for rapid (practically in-situ) and non-destructive measurement of soil carbon. This paper describes mathematical methods to measure carbon levels in stimulated spectra of soil samples. Monte-Carlo simulations were carried out to create soil neutron stimulated gamma spectra using MCNP6.2 code. Two categories of analysis are investigated: peak fitting, and edgemember fitting, a third method is introduced that combines the two into a single result. Evaluation of their effectiveness determines that the mixed model performed best overall.
+Conventional methods for measuring soil carbon are often time-consuming, expensive, and require laboratory analysis. Neutron-gamma analysis (NGA) offers an alternative for rapid (practically in-situ) and non-destructive measurement of soil carbon. This paper describes mathematical methods to measure carbon levels in stimulated spectra of soil samples. Monte-Carlo simulations were carried out to create soil neutron stimulated gamma spectra using MCNP6.2 code. Two categories of analysis are investigated: peak fitting, and endmember fitting, a third method is introduced that combines the two into a single result. Evaluation of their effectiveness determines that the mixed model performed best overall.
 
 \end{abstract}
 \begin{keyword}
 soil elemental content \sep gamma-ray spectroscopy 
 \sep Pulsed Fast Thermal Neutron Analysis \sep Tagged Neutron Method 
 \sep MCNP6.2 simulation \sep peak fitting 
-\sep edgemember fitting \sep non-destructive analysis 
+\sep endmember fitting \sep non-destructive analysis 
 \sep environmental monitoring \sep rapid measurement 
 \sep agricultural soils
 \end{keyword}
@@ -79,6 +79,10 @@ soil elemental content \sep gamma-ray spectroscopy
 Soil carbon is a key component of soil health and plays a crucial role in the global carbon cycle. Accurate measurement of carbon is essential for measuring soil quality, and its impact on the environment \cite{lal_soil_2018} Traditional methods for measuring carbon are often time-consuming, expensive, and require laboratory analysis \cite{de_ros_advancing_2025}. In situ spectral analysis offers an alternative for rapid and non-destructive measurement of soil carbon \cite{yakubova_tagged_2019}.
 
 The Mobile Inelastic Neutron Scattering system (MINS) developed by the National soil dynamics laboratory USDA Agricultural Research Service (NSDL USDA-ARS) uses pulsed fast thermal neutron analysis (PFTNA) \cite{yakubova_measuring_2025} or the Tagged Neutron Method (TNM) \cite{yakubova_tagged_2019} to measure soil carbon and other elements. Different experimental techniques are implemented in these methods. Regardless, both methods rely on analysis of gamma spectra providing information about the elemental composition of the soil. The analysis methods used to interpret the gamma-ray spectra are Peak Fitting for PFTNA and Endmember Fitting for TNM. This paper presents the combination of these methods in calibration. We simulate the MINS with experimental arrangements of equipment and its spectral acquisition using MCNP6.2 code. As samples, common soil minerals with varied carbon and moisture content. Then we apply different gamma-ray spectroscopy methods, to evaluate and compare their effectiveness in measuring carbon in soil.
+
+\subsection{State of the Art}
+
+INCLUDE A SECTION HERE ABOUT STATE OF THE ART
 
 \section{Physical Procedure and Simulation}
 
@@ -309,6 +313,27 @@ $f(x, \text{params})$. Initial parameter values $\text{params}_0$ are chosen, an
 
 \subsection{Peak Baseline Fitting}
 
+\begin{algorithm*}
+\caption{Peak Baseline Fitting Procedure}
+\begin{algorithmic}[2]
+    \Require Data points $\text{Spec}_i = (x_i, y_i)$ for bin $i$.
+    \Require Peak function $F_{\text{peak}}(x, \text{params}_{\text{peak}})$.
+    \Require Baseline function $F_{\text{baseline}}(x, \text{params}_{\text{baseline}})$.
+    \State Model function $F = F_{\text{peak}} + F_{\text{baseline}}$.
+    % \Require Parameter function $g(\text{Spec})$.
+    \For{each target peak}
+        \State Filter data points around the target peak.
+        \State Initialize parameters $\text{params}_0$.
+        \State Define loss function: $L(\text{params}) = \sum_i (y_i - F(x_i, \text{params}))^2$.
+        \State Use TRF algorithm to minimize $L(\text{params})$ within $\text{bounds}$.
+        \State $(x_i, Y_i) \gets (x_i, F(x_i, \text{params}_\text{opt}))$.
+        \State Subtract baseline: $Y_i \gets Y_i - F_{\text{baseline}}(x_i, \text{params}_{\text{baseline,opt}})$.
+        \State Calculate peak area using Simpson's method: $\text{Area} = \text{simpson}(x_i, Y_i)$.
+    \EndFor
+    \State \Return Peak Areas
+    
+\end{algorithmic}
+\end{algorithm*}
 
 \begin{figure}[H]
 \centering
@@ -318,14 +343,29 @@ $f(x, \text{params})$. Initial parameter values $\text{params}_0$ are chosen, an
 \label{fig:peak_fitting}
 \end{figure}
 
-Peak fitting as shown in Figure \ref{fig:peak_fitting} involves using the least-squares method in identifying and quantifying the baseline and peaks in the spectral data that correspond to specific soil components \cite{gardner_use_2011}. This method is useful for extracting information about the concentration of individual elements in the soil. For effective peak fitting, the data is filtered to focus on the peak area.
+Peak fitting as shown in Figure \ref{fig:peak_fitting} involves using the least-squares method in identifying and quantifying the baseline and peaks in the spectral data that correspond to specific soil components \cite{gardner_use_2011}. This method is useful for extracting information about the concentration of individual elements in the soil. First, for each peak, the data is filtered to a local region around key peak areas, defined in Table \ref{tab:element_windows}.
+
+\begin{table}[H]
+\centering
+\caption{Energy Regions for Elemental Peak Analysis}
+\label{tab:element_windows}
+\begin{tabular}{lc}
+\toprule
+Element & Energy Region (MeV) \\
+\midrule
+C & $[4.2,\ 4.7]$ \\
+Si & $[1.675,\ 1.9]$ \\
+O & $[5.9,\ 6.3]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 The fitting function is defined as:
 \begin{equation}
-F_f = F_p + F_b
+F = F_{\text{peak}} + F_{\text{baseline}}
 \end{equation}
 
-where $F_p$ is the peak function (e.g., Gaussian) and $F_b$ is the baseline function (e.g., linear or exponential falloff).
+where $F_{\text{peak}}$ is the peak function (e.g., Gaussian) and $F_{\text{baseline}}$ is the baseline function (e.g., linear or exponential falloff).
 
 \begin{figure}[H]
 \centering
@@ -349,17 +389,52 @@ Gaussian & $a \cdot \exp(-((x - b)^2)/c^2) + d$ \\
 Baseline & \\
 % \hline
 Linear & $ax + b$ \\
-Exponential Falloff & $a \cdot \exp(-b \cdot x) + c$ \\
+Exponential Falloff & $b \cdot \exp(-c \cdot (x-a)) + d$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+$F$ is fitted to the data using the Trust Region Reflective (TRF) algorithm \cite{branch_subspace_1999}. The specific functions for peaks and baselines used are shown in Table \ref{tab:functions}. Initial parameters and bounds are defined per function and spectra analyzed in Table \ref{tab:initial_guess} and Table \ref{tab:bounds}. This begins the fitting process with assumptions about the peak position and shape. For example, the $a$ term in the gaussian function, which controls amplitude, is restricted to be positive but not taller than the peak presented.
+
+
+\begin{table}[H]
+\centering
+\caption{Initial Guess Parameterization for Fitting Functions}
+\label{tab:initial_guess}
+\begin{tabular}{ll}
+\toprule
+Function & Initial Guess $p_0 = [a, b, c, \ldots]$ \\
+\midrule
+Linear & $[0,\ \min(y)]$ \\
+Gaussian & $[0.5 \cdot (\max(y) - \min(y)),\ \text{mean}(x),\ \frac{x_{\max} - x_{\min}}{6}]$ \\
+Exponential Falloff & $[\min(x),\ 0.5 \cdot (\max(y) - \min(y)),\ 1,\ \min(y)]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% filepath: /home/jac2462@uta.edu/Documents/Combined-Spectral-Analysis-Method/Presentation/main/manuscript_revision.tex
+\begin{table}[H]
+\centering
+\caption{Parameter Bounds for Fitting Functions}
+\label{tab:bounds}
+\begin{tabular}{lll}
+\toprule
+Function & Lower Bounds & Upper Bounds \\
+\midrule
+Linear & $[-10^9,\ 0]$ & $[0,\ \max(y)]$ \\
+Gaussian & $[0,\ x_{\min},\ \frac{x_{\max}-x_{\min}}{100}]$ & $[\max(y)-\min(y),\ x_{\max},\ \frac{x_{\max}-x_{\min}}{2}]$ \\
+% Double Gaussian & $([0,\ x_{\min},\ \frac{x_{\max}-x_{\min}}{100},\ 0,\ x_{\min},\ \frac{x_{\max}-x_{\min}}{100}],$ \\
+% & $[\max(y)-\min(y),\ x_{\max},\ \frac{x_{\max}-x_{\min}}{2},\ \max(y)-\min(y),\ x_{\max},\ \frac{x_{\max}-x_{\min}}{2}])$ \\
+Exponential Falloff & $([-\infty,\ -\infty,\ -\infty,\ -\infty]$ & $[\infty,\ \infty,\ \infty,\ \infty])$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 After curve fitting, the baseline function is subtracted from the fitted function to isolate the peak, and the area under the peak is calculated using the Simpsons method implemented by \texttt{scipy.integrate.simpson} \cite{cartwright_simpsons_2017} to quantify the concentration of the corresponding element or compound in the soil. As shown in Figure \ref{fig:c_to_peak}, the peak areas are correlated with the carbon levels in the soil samples. The variance in peak area between samples with similar carbon levels may be attributed to other soil components affecting the peak fitting. This includes elements such as oxygen and silicon, the ladder of which, as in Figure \ref{fig:s_to_peak}, is also shown to have a non-negligible correlation with the carbon peak area.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=90mm]{../Figures/Analysis/silicon_level_vs_predicted_pf.jpg}
+\includegraphics[width=90mm]{../Figures/Analysis/silicon_level_vs_carbon_pf.jpg}
 \caption{Silicon levels are correlated with carbon peak areas over all mineral/carbon/water combinations}
 \label{fig:s_to_peak}
 \end{figure}
@@ -379,6 +454,19 @@ Where $O(E)_i$ is the intensity in bin $i$ and can be represented as a weighted 
 
 \subsection{Spectral Mixture Fitting of Endmembers }
 
+\begin{algorithm*}
+\caption{Endmember Fitting Procedure}
+\begin{algorithmic}[3]
+    \Require Target $\text{Spec}_{\text{target},i} = (x_i, y_i)$.
+    \Require Endmember $\text{Spec}_{k,i} = (x_i, O_{k_i})$.
+    \State Filter data.
+    \State Initialize parameters $A_{k, 0} = [1/k, \ldots, 1/k]$.
+    \State Define loss function: $L(A) = \sum_i (y_i - \sum_k A_k \cdot O_{k_i})^2$.
+    \State Use TRF algorithm to minimize $L(A)$ bounded within $[0, 1]$.
+    \State \Return The final parameters: $A_{k, \text{opt}}$
+\end{algorithmic}
+\end{algorithm*}
+
 The Spectral Mixture Fitting of Endmembers 
 leverages the Spectral Mixture of Endmembers model Eq \ref{eq:mixture} to fit known spectral components to the observed spectrum. This was applied by Bishnoi et al. \cite{bishnoi_modeling_2019} using 3 endmembers. The goal is to express the observed spectrum as a linear combination of several known component spectra (endmembers), each representing a specific soil constituent. To do this, we set $t_{ik} = A_k$, where $A_k$ are the coefficients representing the concentration of each component in the mixture.
 
@@ -388,12 +476,12 @@ F_{c_i} = \sum_{k} A_k \cdot O_{k_i} = A_{C} \cdot O_{C_i} + ... + A_{Na} \cdot 
 \label{eq:combined_spectrum}
 \end{equation}
 
-where $F_{c_i}$ is the combined spectral function at bin $i$, and $O_{k_i}$ are the observed spectral functions of individual components at bin $i$. In Figure \ref{fig:elemental_component_fitting}, we illustrate the result of the fitting process. Beginning with the spectrum with the highest coefficient, we stack plot the linear combination of the component spectra weighted by their respective coefficients $A_k$. The fitting is performed using the curve fitting procedure outlined earlier, $F_{c}$ does not match its observed spectrum exactly. THis is further discussed in the conclusion.
+where $F_{c_i}$ is the combined spectral function at bin $i$, and $O_{k_i}$ are the observed spectral functions of individual components at bin $i$. In Figure \ref{fig:elemental_component_fitting}, we illustrate the result of the fitting process. Beginning with the spectrum with the highest coefficient, we stack plot the linear combination of the component spectra weighted by their respective coefficients $A_k$. The fitting is performed using the curve fitting procedure outlined earlier, $F_{c}$ does not match its observed spectrum exactly. This is further discussed in the conclusion.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=140mm]{../Figures/Analysis/elemental_linear_combination_feldspar.png}
-\caption{Stack plot of edgemember fitting result for feldspar spectrum at 2\% carbon 10\% water level.}
+\caption{Stack plot of endmember fitting result for feldspar spectrum at 2\% carbon 10\% water level.}
 \label{fig:elemental_component_fitting}
 \end{figure}
 
@@ -409,7 +497,7 @@ The carbon coefficient $A_{C}$ is then used for callibration against known carbo
 
 \subsection{Multivariate Calibration Using Singular Value Decomposition}
 
-We employ a multivariate calibration technique. We extract multiple features from the spectral data, such as peak area via Peak Baseline Fitting and the carbon coefficient from edgemember fitting. The data can be represented in matrix form as:
+We employ a multivariate calibration technique. We extract multiple features from the spectral data, such as peak area via Peak Baseline Fitting and the carbon coefficient from endmember fitting. The data can be represented in matrix form as:
 
 \[
 G = 
@@ -420,7 +508,7 @@ G =
     g_{m1} & g_{m2} & \cdots & g_{mn} \\
 \end{bmatrix}
 \]
-for soil sample $m$ and augmented feature $n$ (peak area, edgemember coefficients). A bias term is also included in the model to account for any constant offset in the data.
+for soil sample $m$ and augmented feature $n$ (peak area, endmember coefficients). A bias term is also included in the model to account for any constant offset in the data.
 
 The relationship between these features and the carbon content can be modeled as:
 \[
@@ -495,10 +583,10 @@ where $N$ is the total number of tested samples.
     \centering
     \includegraphics[width=90mm]{../Figures/Analysis/edgemembermultivar.jpg}
     \caption{Multivariate calibration improves accuracy}
-    \label{fig:edgemember_multivar_results}
+    \label{fig:endmember_multivar_results}
 \end{figure}
 
-The effects of multivariate analysis can be seen most clearly with the Edgemember Fitting method as in Figure \ref{fig:edgemember_multivar_results}. By including additional variables such as silicon and oxygen coefficients alongside carbon, the model can better account for overlapping spectral features and interferences, and the predictions become more accurate. The most accurate of both methods was the multivariate analysis including carbon, silicon, and oxygen edgemember coefficients and peak areas as variables respectively as seen in Table \ref{tab:multivar_results}. Combining both the peak areas and the component fitting coefficients into a single model improved the accuracy further.
+The effects of multivariate analysis can be seen most clearly with the Edgemember Fitting method as in Figure \ref{fig:endmember_multivar_results}. By including additional variables such as silicon and oxygen coefficients alongside carbon, the model can better account for overlapping spectral features and interferences, and the predictions become more accurate. The most accurate of both methods was the multivariate analysis including carbon, silicon, and oxygen endmember coefficients and peak areas as variables respectively as seen in Table \ref{tab:multivar_results}. Combining both the peak areas and the component fitting coefficients into a single model improved the accuracy further.
 
 \begin{table}[H]
 \centering
