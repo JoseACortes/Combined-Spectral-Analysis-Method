@@ -36,7 +36,7 @@ gaus_fix_term = 0.5
 def generate_initial_guess(df, bins, f, p0='auto'):
     if p0 == 'auto':
         if f == linearfunc:
-            p0 = [0, df.min().min()]
+            p0 = [0, df.mean().mean()]
         elif f == gaussianfunc:
             p0 = [gaus_fix_term*(df.max().max()-df.min().min()), np.mean(bins), (bins[-1]-bins[0])/6]
         elif f == double_gaussian:
@@ -301,3 +301,118 @@ def PeakFit(
 #     slope, intercept, r, p, se = linregress(training_x, training_y)
 #     analyze = lambda x: slope * x + intercept
 #     mae_test = np.mean(np.abs(testing_y - analyze(testing_x)))
+
+def SinglePeakFit(
+    df: pd.DataFrame, 
+    window, 
+    bins: None, 
+    baseline= 'linear', 
+    peak = 'gauss', 
+    peak_p0 = 'auto', 
+    peak_bounds = 'auto', 
+    baseline_p0 = 'auto', 
+    baseline_bounds = 'auto',) -> tuple:
+    """
+    Analyze spectral data to fit carbon and silicon peaks and baselines.
+    Parameters:
+    df (pd.DataFrame): DataFrame containing spectral data.
+    window (tuple): Tuple specifying the window range (start, end).
+    bins (array-like, optional): X-axis values for the spectra. Defaults to None.
+    baseline (str or function, optional): Baseline function or string identifier for the baseline. Defaults to 'linear'.
+    peak (str or function, optional): Peak function or string identifier for the peak. Defaults to 'gauss'.
+    peak_p0 (array-like or str, optional): Initial guess for peak parameters or 'auto'. Defaults to 'auto'.
+    peak_bounds (tuple or str, optional): Bounds for peak parameters or 'auto'. Defaults to 'auto'.
+    baseline_p0 (array-like or str, optional): Initial guess for baseline parameters or 'auto'. Defaults to 'auto'.
+    baseline_bounds (tuple or str, optional): Bounds for baseline parameters or 'auto'. Defaults to 'auto'.
+    Returns:
+    tuple: A tuple containing the following DataFrames:
+    - fitting_df (pd.DataFrame): DataFrame with peak areas and fitting errors.
+    - parameters_df (pd.DataFrame): DataFrame with fitting parameters.
+    - lines_df (pd.DataFrame): DataFrame with baseline and peak lines.
+    """
+    
+    if bins is None:
+        bins = np.arange(0, len(df), 1)
+    _bins = bins[(bins >= window[0]) & (bins <= window[1])]
+    
+    _df = df.loc[(bins >= window[0]) & (bins <= window[1])]
+    
+    if isinstance(baseline, str):
+        baseline = functions[baseline]
+    baseline_p0 = generate_initial_guess(_df, _bins, baseline, p0=baseline_p0)
+    baseline_lower, baseline_upper = generate_bounds(_df, _bins, baseline, bounds=baseline_bounds)
+
+    if isinstance(peak, str):
+        peak = functions[peak]
+    peak_p0 = generate_initial_guess(_df, _bins, peak, p0=peak_p0)
+    peak_lower, peak_upper = generate_bounds(_df, _bins, peak, bounds=peak_bounds)
+
+    _p0 = baseline_p0 + peak_p0
+    _lower = baseline_lower + peak_lower
+    _upper = baseline_upper + peak_upper
+    _bounds = (_lower, _upper)
+
+    def total_c(x, *params):
+        return baseline(x, *params[:len(baseline_p0)]) + peak(x, *params[len(baseline_p0):])
+    
+    
+    _popts = []
+    _pcovs = []
+    _infodicts = []
+    _mesgs = []
+    _iers = []
+    _peak_areas = []
+    _peak_fitting_errs = []
+    _baseline_lines = []
+    _peak_lines = []
+
+    for col in _df.columns:
+        x_fit = _bins
+        y_fit = _df[col]
+        p0 = np.clip(_p0, _lower, _upper)
+        popt, pcov, infodict, mesg, ier = curve_fit(
+            total_c, 
+            x_fit, 
+            y_fit, 
+            p0=p0,
+            bounds=_bounds,
+            full_output=True,
+            maxfev=1e10,
+            ftol=1e-15,
+        )
+        _popts.append(popt)
+        _pcovs.append(pcov)
+        _infodicts.append(infodict)
+        _mesgs.append(mesg)
+        _iers.append(ier)
+        
+        _peak_area = generic_area_under_peak(peak, x_fit, *popt[len(baseline_p0):])
+        _peak_areas.append(_peak_area)
+
+        _peak_fitting_err = (y_fit - total_c(x_fit, *popt)).std()
+        _peak_fitting_errs.append(_peak_fitting_err)
+        
+        _baseline_lines.append(baseline(x_fit, *popt[:len(baseline_p0)]))
+        _peak_lines.append(total_c(x_fit, *popt))
+
+    fitting_df = pd.DataFrame()
+    fitting_df["label"] = df.columns
+    fitting_df["Peak Area"] = _peak_areas
+    fitting_df["Fitting Error (Std of Residuals)"] = _peak_fitting_errs
+    parameters_df = pd.DataFrame()
+    parameters_df["labels"] = df.columns
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    for i in range(len(baseline_p0)):
+        np.array(_popts).shape
+        parameters_df[f"Baseline {alphabet[i]}"] = np.array(_popts)[:, i]
+    for i in range(len(peak_p0)):
+        parameters_df[f"Peak {alphabet[i]}"] = np.array(_popts)[:, i+len(baseline_p0)] 
+    _lines_dict = {"bins": _bins}
+    for i in range(len(df.columns)):
+        _lines_dict[df.columns[i] + " baseline"] = _baseline_lines[i]
+        _lines_dict[df.columns[i] + " peak"] = _peak_lines[i]
+        _lines_dict[df.columns[i] + " true"] = _df[df.columns[i]].values
+    _lines_df = pd.DataFrame(_lines_dict)
+    fitting_df.set_index('label', inplace=True)
+    parameters_df.set_index('labels', inplace=True)
+    return fitting_df, parameters_df, _lines_df
